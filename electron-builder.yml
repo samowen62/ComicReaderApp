@@ -1,0 +1,17 @@
+appId: com.comicreader.app
+productName: Comic Reader
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+win:
+  target:
+    - nsis
+    - portable
+linux:
+  target:
+    - AppImage
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
