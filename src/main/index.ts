@@ -9,6 +9,7 @@ import {
   sweepOrphanCapturesSync
 } from './projectStore';
 import { getMainProjectDir } from './settings';
+import { getSidecar } from './sidecar';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -97,7 +98,13 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', (event) => {
   event.preventDefault();
-  void cleanExitCleanup().finally(() => {
+  void (async () => {
+    try {
+      await getSidecar(() => mainWindow).shutdown();
+    } catch {
+      // Best effort.
+    }
+    await cleanExitCleanup();
     app.exit(0);
-  });
+  })();
 });

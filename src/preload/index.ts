@@ -5,6 +5,7 @@ import {
   ExportedPage,
   ExportFormat,
   IpcChannels,
+  OcrProgressEvent,
   Project,
   Rect,
   Settings
@@ -50,6 +51,13 @@ const api: ComicReaderApi = {
     ipcRenderer.invoke(IpcChannels.exportImage, projectName, file, pngBase64),
   exportProject: (projectName: string, pages: ExportedPage[], format: ExportFormat) =>
     ipcRenderer.invoke(IpcChannels.exportProject, projectName, pages, format),
+
+  ocrRegion: (projectName: string, file: string, bounds: Rect) =>
+    ipcRenderer.invoke(IpcChannels.ocrRegion, projectName, file, bounds),
+  ocrDetectAndRead: (projectName: string, file: string) =>
+    ipcRenderer.invoke(IpcChannels.ocrDetectAndRead, projectName, file),
+  ocrCancel: () => ipcRenderer.invoke(IpcChannels.ocrCancel),
+  onOcrProgress: (cb) => subscribe<OcrProgressEvent>(IpcChannels.ocrProgress, cb),
 
   sendOverlayRect: (displayId: string, rect: Rect) =>
     ipcRenderer.send(IpcChannels.overlayRect, { displayId, rect } satisfies CaptureRegion),

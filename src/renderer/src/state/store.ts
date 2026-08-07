@@ -40,6 +40,8 @@ interface AppState {
   selectedRectangleId: string | null;
   /** Find Text draw mode: the next drag on the viewer creates a text rectangle. */
   drawMode: boolean;
+  /** Non-null while detect/OCR is running; shown as a progress banner. */
+  pipelineProgress: string | null;
 
   // Capture session state (Capture Mode Screen).
   sessionBaseline: CapturedImage[];
@@ -78,11 +80,16 @@ interface AppState {
   selectRectangle(id: string | null): void;
   setDrawMode(on: boolean): void;
   addRectangle(bounds: Rect): void;
+  /** Find Text: create a rectangle and auto-run manga-ocr on it (spec 6.4). */
+  addRectangleWithOcr(bounds: Rect): Promise<void>;
   moveResizeRectangle(id: string, newBounds: Rect): void;
   deleteRectangle(id: string): void;
   commitRectangleText(id: string, field: 'originalText' | 'translatedText', value: string): void;
   toggleReviewed(id: string): void;
   renumberRectangle(id: string, newIndex: number): void;
+  /** Auto Translate Page steps 1–3 (detect + OCR). Translation arrives in Phase 4. */
+  runAutoFindPage(): Promise<void>;
+  cancelPipeline(): Promise<void>;
 
   beginAddPages(): void;
   beginRegionSelect(): void;
@@ -139,6 +146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   journalOrphan: false,
   selectedRectangleId: null,
   drawMode: false,
+  pipelineProgress: null,
 
   sessionBaseline: [],
   sessionImages: [],
@@ -388,6 +396,53 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistAutosave(projectName, next, action);
   },
 
+  async addRectangleWithOcr(bounds) {
+    const { project, projectName, selectedImage, undoState, busy } = get();
+    if (!project || !selectedImage || !projectName || busy) return;
+    set({ busy: true, drawMode: false, pipelineProgress: 'Reading text with manga-ocr…' });
+    let originalText = '';
+    let failed = false;
+    try {
+      const result = await window.api.ocrRegion(projectName, selectedImage, bounds);
+      originalText = result.text ?? '';
+      failed = !!result.failed;
+      if (failed && result.error) get().notify(`OCR failed: ${result.error}`);
+    } catch (err) {
+      failed = true;
+      get().notify(`OCR failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Re-read project in case the user did something else — still commit onto current state.
+    const latest = get();
+    if (!latest.project || latest.selectedImage !== selectedImage) {
+      set({ busy: false, pipelineProgress: null });
+      return;
+    }
+    const rectangle: TextRectangle = {
+      id: crypto.randomUUID(),
+      bounds,
+      originalText,
+      translatedText: '',
+      reviewed: false,
+      readingOrderIndex: 0,
+      failed
+    };
+    const action: ProjectAction = {
+      type: 'AddRectangle',
+      imageFile: selectedImage,
+      rectangle
+    };
+    const next = applyActionToProject(latest.project, action);
+    set({
+      project: next,
+      selectedRectangleId: rectangle.id,
+      undoState: pushAction(latest.undoState, action),
+      busy: false,
+      pipelineProgress: null
+    });
+    persistAutosave(projectName, next, action);
+  },
+
   moveResizeRectangle(id, newBounds) {
     const { project, projectName, selectedImage, undoState } = get();
     if (!project || !selectedImage) return;
@@ -483,6 +538,84 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = applyActionToProject(project, action);
     set({ project: next, undoState: pushAction(undoState, action) });
     persistAutosave(projectName, next, action);
+  },
+
+  async runAutoFindPage() {
+    const { project, projectName, selectedImage, busy } = get();
+    if (!project || !projectName || !selectedImage || busy) return;
+    const image = project.images.find((i) => i.file === selectedImage);
+    if (!image) return;
+
+    const start = async () => {
+      set({ busy: true, pipelineProgress: 'Starting detection…', drawMode: false });
+      const offProgress = window.api.onOcrProgress((event) => {
+        set({ pipelineProgress: event.message || `${event.stage} ${event.current}/${event.total}` });
+      });
+      try {
+        const result = await window.api.ocrDetectAndRead(projectName, selectedImage);
+        if (result.cancelled) {
+          get().notify('Auto Find Text cancelled');
+          return;
+        }
+        const latest = get();
+        if (!latest.project || latest.selectedImage !== selectedImage) return;
+        const previousRectangles =
+          latest.project.images.find((i) => i.file === selectedImage)?.rectangles ?? [];
+        const newRectangles: TextRectangle[] = result.regions.map((region) => ({
+          id: crypto.randomUUID(),
+          bounds: region.bounds,
+          originalText: region.text ?? '',
+          translatedText: '',
+          reviewed: false,
+          readingOrderIndex: 0,
+          failed: !!region.failed
+        }));
+        const action: ProjectAction = {
+          type: 'ReplacePageRectangles',
+          imageFile: selectedImage,
+          previousRectangles,
+          newRectangles
+        };
+        const next = applyActionToProject(latest.project, action);
+        set({
+          project: next,
+          selectedRectangleId: null,
+          undoState: pushAction(latest.undoState, action)
+        });
+        persistAutosave(projectName, next, action);
+        const failedCount = newRectangles.filter((r) => r.failed).length;
+        get().notify(
+          failedCount > 0
+            ? `Found ${newRectangles.length} region(s); ${failedCount} failed OCR (editable manually). Translation is Phase 4.`
+            : `Found ${newRectangles.length} region(s). Translation is Phase 4.`
+        );
+      } catch (err) {
+        get().notify(`Auto Find Text failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        offProgress();
+        set({ busy: false, pipelineProgress: null });
+      }
+    };
+
+    if (image.rectangles.length > 0) {
+      get().askConfirm({
+        title: 'Replace existing text rectangles?',
+        body: `This page already has ${image.rectangles.length} rectangle(s). Auto Find Text will replace them (undoable).`,
+        confirmLabel: 'Replace',
+        danger: true,
+        onConfirm: () => void start()
+      });
+    } else {
+      await start();
+    }
+  },
+
+  async cancelPipeline() {
+    try {
+      await window.api.ocrCancel();
+    } catch {
+      // Best effort.
+    }
   },
 
   beginAddPages() {

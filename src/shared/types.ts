@@ -76,6 +76,12 @@ export type ProjectAction =
       id: string;
       previousIndex: number;
       newIndex: number;
+    }
+  | {
+      type: 'ReplacePageRectangles';
+      imageFile: string;
+      previousRectangles: TextRectangle[];
+      newRectangles: TextRectangle[];
     };
 
 export interface CaptureRegion {
@@ -128,8 +134,38 @@ export const IpcChannels = {
   hotkeyUnregister: 'hotkey:unregister',
   hotkeyPressed: 'hotkey:pressed',
   exportImage: 'export:image',
-  exportProject: 'export:project'
+  exportProject: 'export:project',
+  ocrRegion: 'ocr:region',
+  ocrDetectAndRead: 'ocr:detectAndRead',
+  ocrCancel: 'ocr:cancel',
+  ocrProgress: 'ocr:progress'
 } as const;
+
+export interface OcrRegionResult {
+  text: string;
+  failed: boolean;
+  error?: string;
+}
+
+export interface OcrDetectedRegion {
+  bounds: Rect;
+  text: string;
+  failed: boolean;
+  error?: string;
+}
+
+export interface OcrDetectAndReadResult {
+  cancelled: boolean;
+  regions: OcrDetectedRegion[];
+}
+
+export interface OcrProgressEvent {
+  id: string;
+  stage: string;
+  current: number;
+  total: number;
+  message: string;
+}
 
 /** API surface exposed to the renderer via the preload contextBridge. */
 export interface ComicReaderApi {
@@ -163,6 +199,13 @@ export interface ComicReaderApi {
   exportImage(projectName: string, file: string, pngBase64: string): Promise<string>;
   /** Writes composited pages as a numbered directory, .zip, or .cbz (spec 10.2). */
   exportProject(projectName: string, pages: ExportedPage[], format: ExportFormat): Promise<string>;
+
+  /** Run manga-ocr on a single image region (Find Text, spec 6.4). */
+  ocrRegion(projectName: string, file: string, bounds: Rect): Promise<OcrRegionResult>;
+  /** Detect bubbles and OCR each region on a page (Auto Translate Page steps 1–3). */
+  ocrDetectAndRead(projectName: string, file: string): Promise<OcrDetectAndReadResult>;
+  ocrCancel(): Promise<void>;
+  onOcrProgress(cb: (event: OcrProgressEvent) => void): () => void;
 
   sendOverlayRect(displayId: string, rect: Rect): void;
   sendOverlayCancel(): void;

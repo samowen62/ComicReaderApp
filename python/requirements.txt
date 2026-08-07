@@ -1,0 +1,16 @@
+# Comic Reader Python sidecar — Phase 3 (detection + OCR)
+#
+# Install into comicReaderApp/python/.venv:
+#   <python> -m venv .venv
+#   .venv\Scripts\pip install -r requirements.txt
+#
+# First run downloads the manga-ocr HuggingFace model (~400MB) and the
+# YOLO bubble-detector weights (~50MB) into the local models/ folder.
+
+torch>=2.1.0
+torchvision>=0.16.0
+manga-ocr>=0.1.11
+ultralytics>=8.0.0
+Pillow>=10.0.0
+numpy>=1.24.0
+opencv-python-headless>=4.8.0

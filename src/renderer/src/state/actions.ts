@@ -41,6 +41,10 @@ export function applyActionToProject(project: Project, action: ProjectAction): P
       return mapImage(project, action.imageFile, (rects) =>
         renumber(rects, action.id, action.newIndex)
       );
+    case 'ReplacePageRectangles':
+      return mapImage(project, action.imageFile, () =>
+        computeReadingOrder(action.newRectangles)
+      );
   }
 }
 
@@ -85,6 +89,10 @@ export function revertActionFromProject(project: Project, action: ProjectAction)
     case 'RenumberRectangle':
       return mapImage(project, action.imageFile, (rects) =>
         renumber(rects, action.id, action.previousIndex)
+      );
+    case 'ReplacePageRectangles':
+      return mapImage(project, action.imageFile, () =>
+        computeReadingOrder(action.previousRectangles)
       );
   }
 }

@@ -4,14 +4,15 @@ Desktop app for capturing manga pages from the screen, translating the Japanese
 text to English, and exporting the translated pages. See
 `../ComicTranslatorSoftwareDescription_v2.md` for the full specification.
 
-**Current state: Phase 1** — project management, screenshot capture, and raw
-page export. OCR (Phase 3), translation (Phase 4), and text-rectangle editing
-(Phase 2) are not implemented yet.
+**Current state: Phase 3** — project management, capture, text-rectangle editing,
+export compositing, bubble detection, and manga-ocr. Translation (Phase 4) is
+not implemented yet; **Auto Find Text** fills original Japanese text only.
 
 ## Stack
 
 - Electron + React 18 + TypeScript (electron-vite)
 - zustand for renderer state
+- Python sidecar: manga-ocr + Ultralytics YOLOv8 comic-speech-bubble detector
 - archiver for .zip/.cbz export
 - Vitest for unit tests
 - electron-builder for packaging
@@ -20,64 +21,65 @@ page export. OCR (Phase 3), translation (Phase 4), and text-rectangle editing
 
 ```bash
 npm install
+
+# Python sidecar (once)
+# Prefer Python 3.10–3.12. A project venv is expected at python/.venv
+cd python
+python -m venv .venv
+.\.venv\Scripts\pip.exe install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+.\.venv\Scripts\pip.exe install -r requirements.txt
+cd ..
+
 npm run dev      # launch in dev mode with hot reload
 npm test         # run unit tests
-npm run build    # type-check-free bundle into out/
-npm run dist     # build + package (Windows NSIS/portable, Linux AppImage)
+npm run build
+npm run dist
 ```
 
-## Usage (Phase 1)
+Override the interpreter with `COMIC_READER_PYTHON` if the venv is elsewhere.
+See [python/README.md](python/README.md).
 
-1. On the Main Screen, create a project or open an existing one. Projects live
-   as child directories of the main project directory (default
-   `Documents/ComicReaderProjects`, configurable in Settings).
-2. New projects land in Capture Mode: drag a capture region on any monitor,
-   confirm it, then press **Capture Screen** or the global hotkey (default F8,
-   configurable in Settings). The hotkey is registered only while Capture Mode
-   is open.
-3. **End Capture Mode** commits the session and opens the Project Screen:
-   reorder/delete pages in the sidebar, **Add Pages** to capture more,
-   **Export Image** / **Export Project** (numbered directory, `.zip`, or
-   `.cbz`) to write pages to disk.
-4. Ctrl+Z / Ctrl+Y undo and redo project actions (reorder, delete, capture
-   commits, page navigation).
+First OCR / detect call downloads model weights (~500MB) into `python/models/`
+and the HuggingFace cache.
+
+## Usage
+
+1. Main Screen: create/open/delete projects (default dir
+   `Documents/ComicReaderProjects`).
+2. Capture Mode: select a multi-monitor region, **Capture Screen** or hotkey
+   (default F8, Capture Mode only), then **End Capture Mode**.
+3. Project Screen:
+   - **Find Text** — draw a rectangle; manga-ocr fills **Original text**.
+   - **Auto Find Text** — detect bubbles + OCR the whole page (one undoable
+     action). Confirms before replacing existing rectangles. Translation is
+     Phase 4.
+   - Edit / move / resize / delete rectangles; Mark Reviewed; reading-order
+     badges (click to renumber).
+   - **Export Image** / **Export Project** — white box + auto-shrunk English
+     over rectangles that have translated text.
+4. Ctrl+Z / Ctrl+Y undo and redo.
 
 ## On-disk layout
 
 ```
 <main project directory>/
   <project name>/
-    project.json       # project data file (autosaved atomically on every action)
-    journal.jsonl      # per-action journal, deleted on clean app exit
-    capture_001.png    # captured pages
+    project.json
+    journal.jsonl
+    capture_001.png
     capture_001_export.png
-    exports/           # Export Project output (directories and archives)
+    exports/
 ```
-
-If the app is killed, the orphaned journal triggers a recovery prompt the next
-time the project is opened (Model A per spec section 9.2: `project.json` is
-always current, so the prompt just offers to discard the journal).
 
 ## Architecture
 
-- **Renderer** (React) is the source of truth for project state and the
-  session-only undo stack. Every user action is applied locally, pushed to the
-  undo stack, and sent over IPC.
-- **Main process** is a persistence/capture service: atomic `project.json`
-  writes, journal appends, screenshot capture, hotkey registration, export.
-- Capture uses one transparent overlay window per display for region
-  selection, then `desktopCapturer` full-resolution screenshots cropped in
-  physical pixels (DPI-aware).
-- Renderer loads project images through a `media://` protocol confined to the
-  main project directory.
+- **Renderer** — project state + session-only undo stack (source of truth).
+- **Main process** — persistence, capture, export writers, Python sidecar IPC.
+- **Python sidecar** — JSON-lines over stdin/stdout; lazy-loads YOLO + manga-ocr.
 
 ## Platform notes / limitations
 
-- Windows 10/11 is the primary target. On Ubuntu, capture and the global
-  hotkey require an X11 session (Wayland restricts both; spec section 12).
-- The app window is not hidden during capture — keep the capture region clear
-  of it.
-- Phase 1 Export Image copies the raw capture; compositing translated text
-  arrives in Phase 2 through the same entry point.
-- Deleted pages' image files stay on disk until the app closes cleanly so undo
-  can restore them within the session.
+- Windows 10/11 primary. Ubuntu capture/hotkey need X11 (not Wayland).
+- Keep the app window clear of the capture region.
+- Deleted page files stay on disk until clean quit so undo can restore them.
+- Auto Translate (per-rectangle and page-level English fill) is Phase 4.

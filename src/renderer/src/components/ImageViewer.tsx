@@ -161,7 +161,7 @@ export function ImageViewer(): React.JSX.Element {
     if (drag.kind === 'draw') {
       const r = drag.current;
       if (r.w >= MIN_SIZE_PX && r.h >= MIN_SIZE_PX) {
-        store.addRectangle(clampRect(r));
+        void store.addRectangleWithOcr(clampRect(r));
       }
     } else if (drag.id) {
       store.moveResizeRectangle(drag.id, clampRect(drag.current));
@@ -181,13 +181,16 @@ export function ImageViewer(): React.JSX.Element {
   const boundsFor = (rect: TextRectangle): Rect =>
     drag && drag.kind === 'move' && drag.id === rect.id ? drag.current : rect.bounds;
 
+  console.log(image?.file);
+  setNatural({ w: 100, h: 100 });
+  console.log(natural);
+  console.log(scale);
   return (
     <div className="viewer" ref={containerRef}>
-      {scale > 0 && natural && (
+       {scale > 0 && (
         <div
           ref={wrapperRef}
           className={'viewer-stage' + (drawMode ? ' viewer-stage-draw' : '')}
-          style={{ width: natural.w * scale, height: natural.h * scale }}
         >
           <img
             className="viewer-image"

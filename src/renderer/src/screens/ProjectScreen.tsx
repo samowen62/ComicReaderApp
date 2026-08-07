@@ -7,8 +7,16 @@ import { useAppStore } from '../state/store';
 
 export function ProjectScreen(): React.JSX.Element {
   const store = useAppStore();
-  const { settings, projectName, project, selectedImage, selectedRectangleId, drawMode, busy } =
-    store;
+  const {
+    settings,
+    projectName,
+    project,
+    selectedImage,
+    selectedRectangleId,
+    drawMode,
+    busy,
+    pipelineProgress
+  } = store;
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   // Rectangle keyboard shortcuts: Delete removes the selected rectangle,
@@ -69,13 +77,26 @@ export function ProjectScreen(): React.JSX.Element {
             Add Pages
           </button>
           <button
+            className="btn btn-primary"
+            disabled={!selectedImage || busy}
+            onClick={() => void store.runAutoFindPage()}
+            title="Detect bubbles and OCR Japanese text (translation in Phase 4)"
+          >
+            Auto Find Text
+          </button>
+          <button
             className={drawMode ? 'btn btn-primary' : 'btn'}
-            disabled={!selectedImage}
+            disabled={!selectedImage || busy}
             onClick={() => store.setDrawMode(!drawMode)}
-            title="Draw a rectangle on the image to add text manually"
+            title="Draw a rectangle on the image; manga-ocr fills the original text"
           >
             Find Text
           </button>
+          {busy && pipelineProgress && (
+            <button className="btn" onClick={() => void store.cancelPipeline()}>
+              Cancel
+            </button>
+          )}
           <button
             className="btn"
             disabled={!selectedImage || busy}
@@ -113,6 +134,16 @@ export function ProjectScreen(): React.JSX.Element {
 
       {drawMode && (
         <div className="draw-banner">Find Text: drag a rectangle on the image (Esc to cancel)</div>
+      )}
+      {pipelineProgress && (
+        <div className="draw-banner pipeline-banner">
+          {pipelineProgress}
+          {busy && (
+            <button className="btn" style={{ marginLeft: 12 }} onClick={() => void store.cancelPipeline()}>
+              Cancel
+            </button>
+          )}
+        </div>
       )}
 
       <div className="project-body">

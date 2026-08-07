@@ -7,6 +7,7 @@ import {
   ExportFormat,
   IpcChannels,
   Project,
+  Rect,
   Settings
 } from '../shared/types';
 import { beginRegionSelect, captureRegion, closeOverlays, initCaptureIpc } from './capture';
@@ -25,6 +26,7 @@ import {
   writeProjectAtomic
 } from './projectStore';
 import { getMainProjectDir, loadSettings, saveSettings } from './settings';
+import { getSidecar } from './sidecar';
 
 let currentProject: string | null = null;
 
@@ -34,6 +36,7 @@ export function getCurrentProject(): string | null {
 
 export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   initCaptureIpc(getMainWindow);
+  const sidecar = getSidecar(getMainWindow);
 
   ipcMain.handle(IpcChannels.settingsGet, () => loadSettings());
   ipcMain.handle(IpcChannels.settingsSet, async (_e, settings: Settings) => {
@@ -133,4 +136,21 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
       return writeProjectExports(projectDir(await getMainProjectDir(), projectName), pages, format);
     }
   );
+
+  ipcMain.handle(
+    IpcChannels.ocrRegion,
+    async (_e, projectName: string, file: string, bounds: Rect) => {
+      const imagePath = path.join(projectDir(await getMainProjectDir(), projectName), path.basename(file));
+      return sidecar.ocrRegion(imagePath, bounds);
+    }
+  );
+
+  ipcMain.handle(IpcChannels.ocrDetectAndRead, async (_e, projectName: string, file: string) => {
+    const imagePath = path.join(projectDir(await getMainProjectDir(), projectName), path.basename(file));
+    return sidecar.detectAndOcr(imagePath);
+  });
+
+  ipcMain.handle(IpcChannels.ocrCancel, async () => {
+    await sidecar.cancel();
+  });
 }
