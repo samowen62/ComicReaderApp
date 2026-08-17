@@ -321,7 +321,14 @@ h2 {
   cursor: crosshair;
 }
 
-.viewer-stage .viewer-image {
+.viewer-stage {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+}
+
+.viewer-image{
   width: 100%;
   height: 100%;
   display: block;

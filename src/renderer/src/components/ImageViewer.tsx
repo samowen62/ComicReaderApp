@@ -53,18 +53,22 @@ export function ImageViewer(): React.JSX.Element {
     return () => observer.disconnect();
   }, []);
 
-  const scale =
-    natural && containerSize.w > 0 && containerSize.h > 0
-      ? Math.min(containerSize.w / natural.w, containerSize.h / natural.h)
-      : 0;
+  const scaleX =
+    natural && containerSize.w > 0
+        ? containerSize.w / natural.w
+        : 1;
+  const scaleY =
+    natural && containerSize.h > 0
+      ? containerSize.h / natural.h
+      : 1;
 
   const toImagePoint = useCallback(
     (e: { clientX: number; clientY: number }) => {
       const box = wrapperRef.current?.getBoundingClientRect();
-      if (!box || scale === 0) return { x: 0, y: 0 };
-      return { x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale };
+      if (!box || scaleX === 0 || scaleY === 0) return { x: 0, y: 0 };
+      return { x: (e.clientX - box.left) / scaleX, y: (e.clientY - box.top) / scaleY };
     },
-    [scale]
+    [scaleX, scaleY]
   );
 
   const clampRect = useCallback(
@@ -177,17 +181,13 @@ export function ImageViewer(): React.JSX.Element {
     );
   }
 
-  const displayRect = (r: Rect): Rect => ({ x: r.x * scale, y: r.y * scale, w: r.w * scale, h: r.h * scale });
+  const displayRect = (r: Rect): Rect => ({ x: r.x * scaleX, y: r.y * scaleY, w: r.w * scaleX, h: r.h * scaleY });
   const boundsFor = (rect: TextRectangle): Rect =>
     drag && drag.kind === 'move' && drag.id === rect.id ? drag.current : rect.bounds;
 
-  console.log(image?.file);
-  setNatural({ w: 100, h: 100 });
-  console.log(natural);
-  console.log(scale);
   return (
     <div className="viewer" ref={containerRef}>
-       {scale > 0 && (
+       {scaleX > 0 && scaleY > 0 && (
         <div
           ref={wrapperRef}
           className={'viewer-stage' + (drawMode ? ' viewer-stage-draw' : '')}
