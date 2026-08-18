@@ -79,10 +79,10 @@ export function ProjectScreen(): React.JSX.Element {
           <button
             className="btn btn-primary"
             disabled={!selectedImage || busy}
-            onClick={() => void store.runAutoFindPage()}
-            title="Detect bubbles and OCR Japanese text (translation in Phase 4)"
+            onClick={() => void store.runAutoTranslatePage()}
+            title="Detect bubbles, OCR Japanese, and translate the whole page"
           >
-            Auto Find Text
+            Auto Translate Page
           </button>
           <button
             className={drawMode ? 'btn btn-primary' : 'btn'}

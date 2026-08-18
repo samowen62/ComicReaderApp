@@ -8,7 +8,8 @@ import {
   OcrProgressEvent,
   Project,
   Rect,
-  Settings
+  Settings,
+  TranslateRequest
 } from '../shared/types';
 
 function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
@@ -58,6 +59,9 @@ const api: ComicReaderApi = {
     ipcRenderer.invoke(IpcChannels.ocrDetectAndRead, projectName, file),
   ocrCancel: () => ipcRenderer.invoke(IpcChannels.ocrCancel),
   onOcrProgress: (cb) => subscribe<OcrProgressEvent>(IpcChannels.ocrProgress, cb),
+
+  translatePage: (request: TranslateRequest) =>
+    ipcRenderer.invoke(IpcChannels.translatePage, request),
 
   sendOverlayRect: (displayId: string, rect: Rect) =>
     ipcRenderer.send(IpcChannels.overlayRect, { displayId, rect } satisfies CaptureRegion),

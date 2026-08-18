@@ -29,6 +29,7 @@ export function ImageViewer(): React.JSX.Element {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -62,14 +63,11 @@ export function ImageViewer(): React.JSX.Element {
       ? containerSize.h / natural.h
       : 1;
 
-  const toImagePoint = useCallback(
-    (e: { clientX: number; clientY: number }) => {
+  const toImagePoint = (e: React.PointerEvent) => {
       const box = wrapperRef.current?.getBoundingClientRect();
-      if (!box || scaleX === 0 || scaleY === 0) return { x: 0, y: 0 };
-      return { x: (e.clientX - box.left) / scaleX, y: (e.clientY - box.top) / scaleY };
-    },
-    [scaleX, scaleY]
-  );
+      if (!box) return { x: 0, y: 0 };
+      return { x: (e.clientX - box.left), y: (e.clientY - box.top) };
+  };
 
   const clampRect = useCallback(
     (r: Rect): Rect => {
@@ -181,11 +179,11 @@ export function ImageViewer(): React.JSX.Element {
     );
   }
 
-  const displayRect = (r: Rect): Rect => ({ x: r.x * scaleX, y: r.y * scaleY, w: r.w * scaleX, h: r.h * scaleY });
+  const displayRect = (r: Rect): Rect => ({ x: r.x, y: r.y, w: r.w, h: r.h });
   const boundsFor = (rect: TextRectangle): Rect =>
     drag && drag.kind === 'move' && drag.id === rect.id ? drag.current : rect.bounds;
 
-  return (
+    return (
     <div className="viewer" ref={containerRef}>
        {scaleX > 0 && scaleY > 0 && (
         <div
@@ -197,6 +195,7 @@ export function ImageViewer(): React.JSX.Element {
             src={mediaUrl(settings.mainProjectDir ?? '', projectName, image.file)}
             alt={image.file}
             draggable={false}
+            ref={imageRef}
             onLoad={(e) =>
               setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
             }

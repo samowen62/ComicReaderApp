@@ -8,7 +8,8 @@ import {
   IpcChannels,
   Project,
   Rect,
-  Settings
+  Settings,
+  TranslateRequest
 } from '../shared/types';
 import { beginRegionSelect, captureRegion, closeOverlays, initCaptureIpc } from './capture';
 import { writeImageExport, writeProjectExports } from './exporter';
@@ -27,6 +28,7 @@ import {
 } from './projectStore';
 import { getMainProjectDir, loadSettings, saveSettings } from './settings';
 import { getSidecar } from './sidecar';
+import { translateWithSettings } from './translation/providers';
 
 let currentProject: string | null = null;
 
@@ -152,5 +154,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle(IpcChannels.ocrCancel, async () => {
     await sidecar.cancel();
+  });
+
+  ipcMain.handle(IpcChannels.translatePage, async (_e, request: TranslateRequest) => {
+    const settings = await loadSettings();
+    return translateWithSettings(request, settings);
   });
 }

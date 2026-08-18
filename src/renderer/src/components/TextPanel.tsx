@@ -7,12 +7,11 @@ const DEBOUNCE_MS = 1500;
 /**
  * Panel to the right of the viewer shown when a text rectangle is selected
  * (spec 6.2/6.6): original and translated text boxes with edits committed on
- * debounce or focus loss, Mark Reviewed, and the (Phase 4) Auto Translate
- * button rendered disabled.
+ * debounce or focus loss, Auto Translate (page context), and Mark Reviewed.
  */
 export function TextPanel(): React.JSX.Element | null {
   const store = useAppStore();
-  const { project, selectedImage, selectedRectangleId } = store;
+  const { project, selectedImage, selectedRectangleId, busy } = store;
 
   const rectangle: TextRectangle | null =
     project?.images
@@ -63,7 +62,16 @@ export function TextPanel(): React.JSX.Element | null {
         />
       </div>
 
-      <button className="btn" disabled title="Available in Phase 4 (translation provider)">
+      <button
+        className="btn btn-primary"
+        disabled={busy || !original.trim()}
+        title="Translate using full page context; only this rectangle's translation is applied"
+        onClick={() => {
+          // Flush pending edits so the provider sees the latest Japanese text.
+          commitNow('originalText', original);
+          void store.autoTranslateRectangle(rectangle.id);
+        }}
+      >
         Auto Translate
       </button>
 

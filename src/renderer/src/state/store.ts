@@ -10,10 +10,12 @@ import {
   Rect,
   Settings,
   TextRectangle,
+  TranslateSegment,
   zeroPaddedPrefix
 } from '../../../shared/types';
 import { compositePage } from '../export/composite';
 import { applyActionToProject, revertActionFromProject } from './actions';
+import { computeReadingOrder } from './readingOrder';
 import { canRedo, canUndo, emptyUndoState, popRedo, popUndo, pushAction, UndoState } from './undoStack';
 
 export type Screen = 'main' | 'settings' | 'capture' | 'project';
@@ -87,8 +89,10 @@ interface AppState {
   commitRectangleText(id: string, field: 'originalText' | 'translatedText', value: string): void;
   toggleReviewed(id: string): void;
   renumberRectangle(id: string, newIndex: number): void;
-  /** Auto Translate Page steps 1–3 (detect + OCR). Translation arrives in Phase 4. */
-  runAutoFindPage(): Promise<void>;
+  /** Auto Translate Page: detect + OCR + translate (spec §7). */
+  runAutoTranslatePage(): Promise<void>;
+  /** Per-rectangle Auto Translate with full page context (spec §6.6). */
+  autoTranslateRectangle(id: string): Promise<void>;
   cancelPipeline(): Promise<void>;
 
   beginAddPages(): void;
@@ -540,7 +544,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistAutosave(projectName, next, action);
   },
 
-  async runAutoFindPage() {
+  async runAutoTranslatePage() {
     const { project, projectName, selectedImage, busy } = get();
     if (!project || !projectName || !selectedImage || busy) return;
     const image = project.images.find((i) => i.file === selectedImage);
@@ -554,14 +558,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       try {
         const result = await window.api.ocrDetectAndRead(projectName, selectedImage);
         if (result.cancelled) {
-          get().notify('Auto Find Text cancelled');
+          get().notify('Auto Translate Page cancelled');
           return;
         }
-        const latest = get();
-        if (!latest.project || latest.selectedImage !== selectedImage) return;
-        const previousRectangles =
-          latest.project.images.find((i) => i.file === selectedImage)?.rectangles ?? [];
-        const newRectangles: TextRectangle[] = result.regions.map((region) => ({
+
+        let working: TextRectangle[] = result.regions.map((region) => ({
           id: crypto.randomUUID(),
           bounds: region.bounds,
           originalText: region.text ?? '',
@@ -570,11 +571,46 @@ export const useAppStore = create<AppState>((set, get) => ({
           readingOrderIndex: 0,
           failed: !!region.failed
         }));
+        working = computeReadingOrder(working);
+
+        set({ pipelineProgress: 'Translating page…' });
+        const segments: TranslateSegment[] = [...working]
+          .sort((a, b) => a.readingOrderIndex - b.readingOrderIndex)
+          .map((r) => ({ rectangleId: r.id, originalText: r.originalText }));
+
+        try {
+          const translated = await window.api.translatePage({
+            segments,
+            sourceLang: 'ja',
+            targetLang: 'en'
+          });
+          const byId = new Map(translated.results.map((r) => [r.rectangleId, r]));
+          working = working.map((r) => {
+            const hit = byId.get(r.id);
+            if (!hit) return r;
+            return {
+              ...r,
+              translatedText: hit.translatedText ?? '',
+              failed: r.failed || !!hit.failed
+            };
+          });
+        } catch (err) {
+          // Connectivity / provider failure aborts translation but keeps OCR
+          // rectangles (spec §7 / §11).
+          get().notify(
+            `Translation failed: ${err instanceof Error ? err.message : String(err)}. OCR results were kept.`
+          );
+        }
+
+        const latest = get();
+        if (!latest.project || latest.selectedImage !== selectedImage) return;
+        const previousRectangles =
+          latest.project.images.find((i) => i.file === selectedImage)?.rectangles ?? [];
         const action: ProjectAction = {
           type: 'ReplacePageRectangles',
           imageFile: selectedImage,
           previousRectangles,
-          newRectangles
+          newRectangles: working
         };
         const next = applyActionToProject(latest.project, action);
         set({
@@ -583,14 +619,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           undoState: pushAction(latest.undoState, action)
         });
         persistAutosave(projectName, next, action);
-        const failedCount = newRectangles.filter((r) => r.failed).length;
+        const failedCount = working.filter((r) => r.failed).length;
+        const translatedCount = working.filter((r) => r.translatedText.trim()).length;
         get().notify(
-          failedCount > 0
-            ? `Found ${newRectangles.length} region(s); ${failedCount} failed OCR (editable manually). Translation is Phase 4.`
-            : `Found ${newRectangles.length} region(s). Translation is Phase 4.`
+          `Page done: ${working.length} region(s), ${translatedCount} translated` +
+            (failedCount ? `, ${failedCount} failed` : '')
         );
       } catch (err) {
-        get().notify(`Auto Find Text failed: ${err instanceof Error ? err.message : String(err)}`);
+        get().notify(
+          `Auto Translate Page failed: ${err instanceof Error ? err.message : String(err)}`
+        );
       } finally {
         offProgress();
         set({ busy: false, pipelineProgress: null });
@@ -600,13 +638,67 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (image.rectangles.length > 0) {
       get().askConfirm({
         title: 'Replace existing text rectangles?',
-        body: `This page already has ${image.rectangles.length} rectangle(s). Auto Find Text will replace them (undoable).`,
+        body: `This page already has ${image.rectangles.length} rectangle(s). Auto Translate Page will replace them (undoable).`,
         confirmLabel: 'Replace',
         danger: true,
         onConfirm: () => void start()
       });
     } else {
       await start();
+    }
+  },
+
+  async autoTranslateRectangle(id) {
+    const { project, projectName, selectedImage, busy } = get();
+    if (!project || !projectName || !selectedImage || busy) return;
+    const image = project.images.find((i) => i.file === selectedImage);
+    const target = image?.rectangles.find((r) => r.id === id);
+    if (!image || !target) return;
+    if (!target.originalText.trim()) {
+      get().notify('Selected rectangle has no original text to translate');
+      return;
+    }
+
+    set({ busy: true, pipelineProgress: 'Translating with page context…' });
+    try {
+      const segments: TranslateSegment[] = [...image.rectangles]
+        .sort((a, b) => a.readingOrderIndex - b.readingOrderIndex)
+        .map((r) => ({ rectangleId: r.id, originalText: r.originalText }));
+      const response = await window.api.translatePage({
+        segments,
+        sourceLang: 'ja',
+        targetLang: 'en'
+      });
+      const hit = response.results.find((r) => r.rectangleId === id);
+      if (!hit) {
+        get().notify('Translation provider returned no result for this rectangle');
+        return;
+      }
+      const latest = get();
+      if (!latest.project || latest.selectedImage !== selectedImage) return;
+      const action: ProjectAction = {
+        type: 'ApplyTranslations',
+        imageFile: selectedImage,
+        changes: [
+          {
+            id,
+            previousTranslatedText: target.translatedText,
+            newTranslatedText: hit.translatedText ?? '',
+            previousFailed: target.failed,
+            newFailed: !!hit.failed
+          }
+        ]
+      };
+      const next = applyActionToProject(latest.project, action);
+      set({ project: next, undoState: pushAction(latest.undoState, action) });
+      persistAutosave(projectName, next, action);
+      if (hit.failed) {
+        get().notify(`Translation failed: ${hit.error ?? 'unknown error'}`);
+      }
+    } catch (err) {
+      get().notify(`Translation failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      set({ busy: false, pipelineProgress: null });
     }
   },
 

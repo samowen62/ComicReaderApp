@@ -1,7 +1,13 @@
 import { app } from 'electron';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { DEFAULT_EXPORT_FONT, DEFAULT_HOTKEY, Settings } from '../shared/types';
+import {
+  DEFAULT_EXPORT_FONT,
+  DEFAULT_HOTKEY,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_TRANSLATION_PROVIDER,
+  Settings
+} from '../shared/types';
 
 let cached: Settings | null = null;
 
@@ -13,7 +19,11 @@ function defaultSettings(): Settings {
   return {
     mainProjectDir: path.join(app.getPath('documents'), 'ComicReaderProjects'),
     captureHotkey: DEFAULT_HOTKEY,
-    exportFontFamily: DEFAULT_EXPORT_FONT
+    exportFontFamily: DEFAULT_EXPORT_FONT,
+    translationProvider: DEFAULT_TRANSLATION_PROVIDER,
+    translationApiKey: '',
+    translationBaseUrl: '',
+    translationModel: DEFAULT_OPENAI_MODEL
   };
 }
 

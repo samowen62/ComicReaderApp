@@ -45,6 +45,19 @@ export function applyActionToProject(project: Project, action: ProjectAction): P
       return mapImage(project, action.imageFile, () =>
         computeReadingOrder(action.newRectangles)
       );
+    case 'ApplyTranslations':
+      return mapImage(project, action.imageFile, (rects) => {
+        const byId = new Map(action.changes.map((c) => [c.id, c]));
+        return rects.map((r) => {
+          const change = byId.get(r.id);
+          if (!change) return r;
+          return {
+            ...r,
+            translatedText: change.newTranslatedText,
+            failed: change.newFailed
+          };
+        });
+      });
   }
 }
 
@@ -94,6 +107,19 @@ export function revertActionFromProject(project: Project, action: ProjectAction)
       return mapImage(project, action.imageFile, () =>
         computeReadingOrder(action.previousRectangles)
       );
+    case 'ApplyTranslations':
+      return mapImage(project, action.imageFile, (rects) => {
+        const byId = new Map(action.changes.map((c) => [c.id, c]));
+        return rects.map((r) => {
+          const change = byId.get(r.id);
+          if (!change) return r;
+          return {
+            ...r,
+            translatedText: change.previousTranslatedText,
+            failed: change.previousFailed
+          };
+        });
+      });
   }
 }
 

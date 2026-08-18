@@ -1,4 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_TRANSLATION_PROVIDER,
+  TRANSLATION_PROVIDER_OPTIONS,
+  TranslationProviderId
+} from '../../../shared/types';
 import { useAppStore } from '../state/store';
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta']);
@@ -21,12 +27,20 @@ export function SettingsScreen(): React.JSX.Element {
   const [mainDir, setMainDir] = useState('');
   const [hotkey, setHotkey] = useState('');
   const [exportFont, setExportFont] = useState('');
+  const [provider, setProvider] = useState<TranslationProviderId>(DEFAULT_TRANSLATION_PROVIDER);
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [model, setModel] = useState(DEFAULT_OPENAI_MODEL);
 
   useEffect(() => {
     if (settings) {
       setMainDir(settings.mainProjectDir ?? '');
       setHotkey(settings.captureHotkey);
       setExportFont(settings.exportFontFamily);
+      setProvider(settings.translationProvider);
+      setApiKey(settings.translationApiKey);
+      setBaseUrl(settings.translationBaseUrl);
+      setModel(settings.translationModel);
     }
   }, [settings]);
 
@@ -35,11 +49,17 @@ export function SettingsScreen(): React.JSX.Element {
     if (picked) setMainDir(picked);
   };
 
+  const selectedMeta = TRANSLATION_PROVIDER_OPTIONS.find((o) => o.id === provider);
+
   const save = async () => {
     await saveSettings({
       mainProjectDir: mainDir || null,
       captureHotkey: hotkey || 'F8',
-      exportFontFamily: exportFont.trim() || 'Arial'
+      exportFontFamily: exportFont.trim() || 'Arial',
+      translationProvider: provider,
+      translationApiKey: apiKey.trim(),
+      translationBaseUrl: baseUrl.trim(),
+      translationModel: model.trim() || DEFAULT_OPENAI_MODEL
     });
     notify('Settings saved');
     setScreen('main');
@@ -96,6 +116,64 @@ export function SettingsScreen(): React.JSX.Element {
           Font family used for translated text in exported images. Any installed system font works.
         </p>
       </section>
+
+      <section className="settings-section">
+        <label className="field-label">Translation provider</label>
+        <select
+          className="input"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as TranslationProviderId)}
+        >
+          {TRANSLATION_PROVIDER_OPTIONS.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <p className="muted">{selectedMeta?.notes}</p>
+      </section>
+
+      <section className="settings-section">
+        <label className="field-label">
+          API key{selectedMeta?.needsKey ? '' : ' (optional)'}
+        </label>
+        <input
+          className="input"
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder={selectedMeta?.needsKey ? 'Required' : 'Optional'}
+          autoComplete="off"
+        />
+      </section>
+
+      <section className="settings-section">
+        <label className="field-label">Base URL (optional)</label>
+        <input
+          className="input"
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder={
+            provider === 'openaiCompatible'
+              ? 'https://api.openai.com/v1'
+              : provider === 'libreTranslate'
+                ? 'https://libretranslate.com'
+                : 'Leave blank for provider default'
+          }
+        />
+      </section>
+
+      {provider === 'openaiCompatible' && (
+        <section className="settings-section">
+          <label className="field-label">Model</label>
+          <input
+            className="input"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder={DEFAULT_OPENAI_MODEL}
+          />
+        </section>
+      )}
 
       <div className="settings-save-row">
         <button className="btn btn-primary" onClick={() => void save()}>

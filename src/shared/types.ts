@@ -34,10 +34,58 @@ export interface Settings {
   captureHotkey: string;
   /** Font family used when rendering translated text at export (spec 10.1). */
   exportFontFamily: string;
+  /** Selected translation provider (spec 7.4). */
+  translationProvider: TranslationProviderId;
+  /** API key / token for the selected provider (stored in settings.json). */
+  translationApiKey: string;
+  /**
+   * Optional base URL override. Used by openaiCompatible (default OpenAI) and
+   * libreTranslate (default public instance). DeepL free vs pro is inferred
+   * from the key prefix when this is empty.
+   */
+  translationBaseUrl: string;
+  /** Model name for openaiCompatible (e.g. gpt-4o-mini). */
+  translationModel: string;
 }
+
+export type TranslationProviderId = 'deepl' | 'google' | 'openaiCompatible' | 'libreTranslate';
 
 export const DEFAULT_HOTKEY = 'F8';
 export const DEFAULT_EXPORT_FONT = 'Arial';
+export const DEFAULT_TRANSLATION_PROVIDER: TranslationProviderId = 'deepl';
+export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+
+export const TRANSLATION_PROVIDER_OPTIONS: Array<{
+  id: TranslationProviderId;
+  label: string;
+  needsKey: boolean;
+  notes: string;
+}> = [
+  {
+    id: 'deepl',
+    label: 'DeepL',
+    needsKey: true,
+    notes: 'Best JP→EN quality for MT. Free keys use api-free.deepl.com; pro keys use api.deepl.com.'
+  },
+  {
+    id: 'google',
+    label: 'Google Cloud Translation',
+    needsKey: true,
+    notes: 'Requires a Cloud Translation API key from Google Cloud.'
+  },
+  {
+    id: 'openaiCompatible',
+    label: 'OpenAI-compatible (LLM)',
+    needsKey: true,
+    notes: 'Sends the whole page as numbered context. Works with OpenAI or any compatible base URL.'
+  },
+  {
+    id: 'libreTranslate',
+    label: 'LibreTranslate',
+    needsKey: false,
+    notes: 'Self-hosted / public LibreTranslate. Optional API key. Quality varies.'
+  }
+];
 
 export function emptyProject(): Project {
   return { version: PROJECT_VERSION, images: [] };
@@ -82,6 +130,17 @@ export type ProjectAction =
       imageFile: string;
       previousRectangles: TextRectangle[];
       newRectangles: TextRectangle[];
+    }
+  | {
+      type: 'ApplyTranslations';
+      imageFile: string;
+      changes: Array<{
+        id: string;
+        previousTranslatedText: string;
+        newTranslatedText: string;
+        previousFailed: boolean;
+        newFailed: boolean;
+      }>;
     };
 
 export interface CaptureRegion {
@@ -138,7 +197,8 @@ export const IpcChannels = {
   ocrRegion: 'ocr:region',
   ocrDetectAndRead: 'ocr:detectAndRead',
   ocrCancel: 'ocr:cancel',
-  ocrProgress: 'ocr:progress'
+  ocrProgress: 'ocr:progress',
+  translatePage: 'translate:page'
 } as const;
 
 export interface OcrRegionResult {
@@ -165,6 +225,29 @@ export interface OcrProgressEvent {
   current: number;
   total: number;
   message: string;
+}
+
+/** One bubble/line sent to the translation provider in reading order (spec 7.4). */
+export interface TranslateSegment {
+  rectangleId: string;
+  originalText: string;
+}
+
+export interface TranslateSegmentResult {
+  rectangleId: string;
+  translatedText: string;
+  failed?: boolean;
+  error?: string;
+}
+
+export interface TranslateRequest {
+  segments: TranslateSegment[];
+  sourceLang: 'ja';
+  targetLang: 'en';
+}
+
+export interface TranslateResponse {
+  results: TranslateSegmentResult[];
 }
 
 /** API surface exposed to the renderer via the preload contextBridge. */
@@ -206,6 +289,9 @@ export interface ComicReaderApi {
   ocrDetectAndRead(projectName: string, file: string): Promise<OcrDetectAndReadResult>;
   ocrCancel(): Promise<void>;
   onOcrProgress(cb: (event: OcrProgressEvent) => void): () => void;
+
+  /** Translate an ordered list of segments with page-level context (spec 7.4). */
+  translatePage(request: TranslateRequest): Promise<TranslateResponse>;
 
   sendOverlayRect(displayId: string, rect: Rect): void;
   sendOverlayCancel(): void;
