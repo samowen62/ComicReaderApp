@@ -116,18 +116,25 @@ describe('rectangle user actions', () => {
     });
   });
 
-  it('EditRectangleText applies and reverts per field', () => {
-    const project = projectWith([rect('r1', { x: 0, y: 0, w: 50, h: 50 })]);
+  it('EditRectangleText applies and reverts per field and clears reviewed', () => {
+    const project = projectWith([
+      rect('r1', { x: 0, y: 0, w: 50, h: 50 }, { reviewed: true })
+    ]);
     const action: ProjectAction = {
       type: 'EditRectangleText',
       imageFile: 'a.png',
       id: 'r1',
       field: 'translatedText',
       previousValue: '',
-      newValue: 'Hello'
+      newValue: 'Hello',
+      previousReviewed: true
     };
-    expect(rectsOf(applyActionToProject(project, action))[0].translatedText).toBe('Hello');
-    expect(rectsOf(revertActionFromProject(applyActionToProject(project, action), action))[0].translatedText).toBe('');
+    const applied = applyActionToProject(project, action);
+    expect(rectsOf(applied)[0].translatedText).toBe('Hello');
+    expect(rectsOf(applied)[0].reviewed).toBe(false);
+    const reverted = revertActionFromProject(applied, action);
+    expect(rectsOf(reverted)[0].translatedText).toBe('');
+    expect(rectsOf(reverted)[0].reviewed).toBe(true);
   });
 
   it('ToggleReviewed flips and restores', () => {

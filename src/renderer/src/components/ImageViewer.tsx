@@ -4,39 +4,50 @@ import { mediaUrl } from '../media';
 import { useAppStore } from '../state/store';
 
 const MIN_SIZE_PX = 4;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 8;
 type Handle = 'nw' | 'ne' | 'sw' | 'se';
 
 interface DragState {
-  kind: 'move' | 'draw';
+  kind: 'move' | 'draw' | 'pan';
   id?: string;
   handle?: Handle;
   startX: number;
   startY: number;
   origin: Rect;
   current: Rect;
+  panOrigin?: { x: number; y: number };
 }
 
 /**
- * Displays the selected image with its text rectangles overlaid (spec 6.3):
- * blue dashed outlines, red for the selection, badges for reading order and
- * reviewed state, click/drag/handle interactions, and Find Text draw mode.
- * Coordinates are stored in image pixels; the overlay maps them through the
- * current display scale.
+ * Displays the selected image with text rectangles overlaid. Coordinates are
+ * stored in image pixels. Fit-to-container × user zoom + pan are applied as a
+ * CSS transform; pointer events are mapped back through the inverse.
  */
 export function ImageViewer(): React.JSX.Element {
   const store = useAppStore();
-  const { settings, projectName, project, selectedImage, selectedRectangleId, drawMode } = store;
+  const {
+    settings,
+    projectName,
+    project,
+    selectedImage,
+    selectedRectangleId,
+    drawMode,
+    viewerZoom,
+    viewerPan
+  } = store;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
 
   const image = project?.images.find((i) => i.file === selectedImage) ?? null;
 
+  // Reset per-image ephemeral UI only — zoom/pan persist across images.
   useEffect(() => {
     setNatural(null);
     setDrag(null);
@@ -54,20 +65,43 @@ export function ImageViewer(): React.JSX.Element {
     return () => observer.disconnect();
   }, []);
 
-  const scaleX =
-    natural && containerSize.w > 0
-        ? containerSize.w / natural.w
-        : 1;
-  const scaleY =
-    natural && containerSize.h > 0
-      ? containerSize.h / natural.h
-      : 1;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceHeld(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
 
-  const toImagePoint = (e: React.PointerEvent) => {
-      const box = wrapperRef.current?.getBoundingClientRect();
-      if (!box) return { x: 0, y: 0 };
-      return { x: (e.clientX - box.left), y: (e.clientY - box.top) };
-  };
+  const fitScale =
+    natural && containerSize.w > 0 && containerSize.h > 0
+      ? Math.min(containerSize.w / natural.w, containerSize.h / natural.h)
+      : 1;
+  const totalScale = fitScale * viewerZoom;
+
+  const toImagePoint = useCallback(
+    (e: { clientX: number; clientY: number }) => {
+      const box = containerRef.current?.getBoundingClientRect();
+      if (!box || totalScale === 0) return { x: 0, y: 0 };
+      return {
+        x: (e.clientX - box.left - viewerPan.x) / totalScale,
+        y: (e.clientY - box.top - viewerPan.y) / totalScale
+      };
+    },
+    [totalScale, viewerPan.x, viewerPan.y]
+  );
 
   const clampRect = useCallback(
     (r: Rect): Rect => {
@@ -84,7 +118,7 @@ export function ImageViewer(): React.JSX.Element {
     [natural]
   );
 
-  /** Overlap rule: the rectangle whose center is closest to the click wins (spec 6.3). */
+  /** Overlap rule: the rectangle whose center is closest to the click wins. */
   const hitTest = useCallback(
     (px: { x: number; y: number }): TextRectangle | null => {
       if (!image) return null;
@@ -104,47 +138,114 @@ export function ImageViewer(): React.JSX.Element {
     [image]
   );
 
+  const onWheel = (e: React.WheelEvent) => {
+    if (!natural || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const cx = e.clientX - box.left;
+    const cy = e.clientY - box.top;
+    const oldTotal = totalScale;
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, viewerZoom * factor));
+    const newTotal = fitScale * newZoom;
+    if (newTotal === 0 || oldTotal === 0) return;
+    const imgX = (cx - viewerPan.x) / oldTotal;
+    const imgY = (cy - viewerPan.y) / oldTotal;
+    store.setViewerZoom(newZoom);
+    store.setViewerPan({
+      x: cx - imgX * newTotal,
+      y: cy - imgY * newTotal
+    });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (!image || !natural) return;
+    const panGesture = e.button === 1 || (e.button === 0 && spaceHeld);
+    if (panGesture) {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDrag({
+        kind: 'pan',
+        startX: e.clientX,
+        startY: e.clientY,
+        origin: { x: 0, y: 0, w: 0, h: 0 },
+        current: { x: 0, y: 0, w: 0, h: 0 },
+        panOrigin: { ...viewerPan }
+      });
+      return;
+    }
+    if (e.button !== 0) return;
+
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = toImagePoint(e);
 
     if (drawMode) {
-      setDrag({ kind: 'draw', startX: p.x, startY: p.y, origin: { x: p.x, y: p.y, w: 0, h: 0 }, current: { x: p.x, y: p.y, w: 0, h: 0 } });
+      setDrag({
+        kind: 'draw',
+        startX: p.x,
+        startY: p.y,
+        origin: { x: p.x, y: p.y, w: 0, h: 0 },
+        current: { x: p.x, y: p.y, w: 0, h: 0 }
+      });
       return;
     }
 
     const hit = hitTest(p);
     if (!hit) {
-      // Click outside any rectangle deselects and clears the text boxes (spec 6.3).
       store.selectRectangle(null);
       return;
     }
     store.selectRectangle(hit.id);
-    setDrag({ kind: 'move', id: hit.id, startX: p.x, startY: p.y, origin: hit.bounds, current: hit.bounds });
+    setDrag({
+      kind: 'move',
+      id: hit.id,
+      startX: p.x,
+      startY: p.y,
+      origin: hit.bounds,
+      current: hit.bounds
+    });
   };
 
   const onHandleDown = (e: React.PointerEvent, rect: TextRectangle, handle: Handle) => {
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const p = toImagePoint(e);
-    setDrag({ kind: 'move', id: rect.id, handle, startX: p.x, startY: p.y, origin: rect.bounds, current: rect.bounds });
+    setDrag({
+      kind: 'move',
+      id: rect.id,
+      handle,
+      startX: p.x,
+      startY: p.y,
+      origin: rect.bounds,
+      current: rect.bounds
+    });
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag) return;
+    if (drag.kind === 'pan' && drag.panOrigin) {
+      store.setViewerPan({
+        x: drag.panOrigin.x + (e.clientX - drag.startX),
+        y: drag.panOrigin.y + (e.clientY - drag.startY)
+      });
+      return;
+    }
+
     const p = toImagePoint(e);
     const dx = p.x - drag.startX;
     const dy = p.y - drag.startY;
 
     if (drag.kind === 'draw') {
-      const current = {
-        x: Math.min(drag.startX, p.x),
-        y: Math.min(drag.startY, p.y),
-        w: Math.abs(dx),
-        h: Math.abs(dy)
-      };
-      setDrag({ ...drag, current });
+      setDrag({
+        ...drag,
+        current: {
+          x: Math.min(drag.startX, p.x),
+          y: Math.min(drag.startY, p.y),
+          w: Math.abs(dx),
+          h: Math.abs(dy)
+        }
+      });
       return;
     }
 
@@ -165,7 +266,7 @@ export function ImageViewer(): React.JSX.Element {
       if (r.w >= MIN_SIZE_PX && r.h >= MIN_SIZE_PX) {
         void store.addRectangleWithOcr(clampRect(r));
       }
-    } else if (drag.id) {
+    } else if (drag.kind === 'move' && drag.id) {
       store.moveResizeRectangle(drag.id, clampRect(drag.current));
     }
     setDrag(null);
@@ -179,35 +280,47 @@ export function ImageViewer(): React.JSX.Element {
     );
   }
 
-  const displayRect = (r: Rect): Rect => ({ x: r.x, y: r.y, w: r.w, h: r.h });
   const boundsFor = (rect: TextRectangle): Rect =>
     drag && drag.kind === 'move' && drag.id === rect.id ? drag.current : rect.bounds;
 
-    return (
-    <div className="viewer" ref={containerRef}>
-       {scaleX > 0 && scaleY > 0 && (
+  const stageClass =
+    'viewer-stage' +
+    (drawMode ? ' viewer-stage-draw' : '') +
+    (spaceHeld || drag?.kind === 'pan' ? ' viewer-stage-pan' : '');
+
+  return (
+    <div
+      className="viewer"
+      ref={containerRef}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {natural && totalScale > 0 && (
         <div
           ref={wrapperRef}
-          className={'viewer-stage' + (drawMode ? ' viewer-stage-draw' : '')}
+          className={stageClass}
+          style={{
+            width: natural.w,
+            height: natural.h,
+            transform: `translate(${viewerPan.x}px, ${viewerPan.y}px) scale(${totalScale})`,
+            transformOrigin: '0 0'
+          }}
         >
           <img
             className="viewer-image"
             src={mediaUrl(settings.mainProjectDir ?? '', projectName, image.file)}
             alt={image.file}
             draggable={false}
-            ref={imageRef}
             onLoad={(e) =>
               setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
             }
           />
-          <div
-            className="rect-layer"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-          >
+          <div className="rect-layer">
             {image.rectangles.map((rect) => {
-              const b = displayRect(boundsFor(rect));
+              const b = boundsFor(rect);
               const selected = rect.id === selectedRectangleId;
               const cls =
                 'text-rect' +
@@ -266,10 +379,20 @@ export function ImageViewer(): React.JSX.Element {
               );
             })}
             {drag?.kind === 'draw' && (
-              <div className="text-rect text-rect-draw" style={rectStyle(displayRect(drag.current))} />
+              <div className="text-rect text-rect-draw" style={rectStyle(drag.current)} />
             )}
           </div>
         </div>
+      )}
+      {!natural && (
+        <img
+          className="viewer-image-probe"
+          src={mediaUrl(settings.mainProjectDir ?? '', projectName, image.file)}
+          alt=""
+          onLoad={(e) =>
+            setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+          }
+        />
       )}
       {!natural && <p className="muted">Loading…</p>}
     </div>

@@ -92,6 +92,30 @@ export function ProjectScreen(): React.JSX.Element {
           >
             Find Text
           </button>
+          <button
+            className="btn"
+            disabled={!selectedImage}
+            onClick={() => store.adjustViewerZoom(1 / 1.25)}
+            title="Zoom out"
+          >
+            Zoom −
+          </button>
+          <button
+            className="btn"
+            disabled={!selectedImage}
+            onClick={() => store.adjustViewerZoom(1.25)}
+            title="Zoom in"
+          >
+            Zoom +
+          </button>
+          <button
+            className="btn"
+            disabled={!selectedImage}
+            onClick={() => store.resetViewerView()}
+            title="Reset zoom and pan"
+          >
+            Reset view
+          </button>
           {busy && pipelineProgress && (
             <button className="btn" onClick={() => void store.cancelPipeline()}>
               Cancel

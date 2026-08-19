@@ -52,8 +52,10 @@ export function TextPanel(): React.JSX.Element | null {
         <label className="field-label">Original text</label>
         <textarea
           className="text-box"
+          lang="ja"
           value={original}
           rows={4}
+          onFocus={() => void window.api.setJapaneseIme()}
           onChange={(e) => {
             setOriginal(e.target.value);
             scheduleCommit('originalText', e.target.value);
@@ -66,6 +68,7 @@ export function TextPanel(): React.JSX.Element | null {
         className="btn btn-primary"
         disabled={busy || !original.trim()}
         title="Translate using full page context; only this rectangle's translation is applied"
+        onFocus={() => void window.api.setEnglishIme()}
         onClick={() => {
           // Flush pending edits so the provider sees the latest Japanese text.
           commitNow('originalText', original);
@@ -79,8 +82,10 @@ export function TextPanel(): React.JSX.Element | null {
         <label className="field-label">Translated text</label>
         <textarea
           className="text-box"
+          lang="en"
           value={translated}
           rows={4}
+          onFocus={() => void window.api.setEnglishIme()}
           onChange={(e) => {
             setTranslated(e.target.value);
             scheduleCommit('translatedText', e.target.value);
@@ -91,12 +96,17 @@ export function TextPanel(): React.JSX.Element | null {
 
       <button
         className={rectangle.reviewed ? 'btn btn-primary' : 'btn'}
+        onFocus={() => void window.api.setEnglishIme()}
         onClick={() => store.toggleReviewed(rectangle.id)}
       >
         {rectangle.reviewed ? 'Reviewed ✓' : 'Mark Reviewed'}
       </button>
 
-      <button className="btn btn-danger" onClick={() => store.deleteRectangle(rectangle.id)}>
+      <button
+        className="btn btn-danger"
+        onFocus={() => void window.api.setEnglishIme()}
+        onClick={() => store.deleteRectangle(rectangle.id)}
+      >
         Delete Rectangle
       </button>
 

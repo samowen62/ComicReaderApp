@@ -35,7 +35,9 @@ npm run build
 ```
 
 Configure a translation provider under **Settings** (API key required for
-DeepL / Google / OpenAI-compatible).
+DeepL / Google / OpenAI-compatible). On Windows, install a Japanese IME so the
+Original-text field can switch to Hiragana on focus. **Export text box scale**
+(default 70%) shrinks composited white boxes about their center.
 
 ## Usage
 
@@ -45,6 +47,8 @@ DeepL / Google / OpenAI-compatible).
 3. Or **Find Text** to draw a region (auto OCR), then **Auto Translate** on the
    selected rectangle (sends full page context; applies only that bubble).
 4. Edit / Mark Reviewed / Export Image or Export Project (.zip / .cbz).
+5. Zoom/pan the page viewer with Ctrl+wheel, middle-drag or Space+drag, or the
+   Zoom − / Zoom + / Reset view toolbar buttons (view persists across pages).
 
 ## Providers
 

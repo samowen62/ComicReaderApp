@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  DEFAULT_EXPORT_RECT_SCALE,
   DEFAULT_OPENAI_MODEL,
   DEFAULT_TRANSLATION_PROVIDER,
   TRANSLATION_PROVIDER_OPTIONS,
@@ -8,6 +9,23 @@ import {
 import { useAppStore } from '../state/store';
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta']);
+const MIN_EXPORT_SCALE_PCT = 20;
+const MAX_EXPORT_SCALE_PCT = 100;
+
+function clampExportRectScale(scale: number): number {
+  if (!Number.isFinite(scale)) return DEFAULT_EXPORT_RECT_SCALE;
+  return Math.min(1, Math.max(0.2, scale));
+}
+
+function scaleToPercent(scale: number): number {
+  return Math.round(clampExportRectScale(scale) * 100);
+}
+
+function percentToScale(pct: number): number {
+  const n = Number.isFinite(pct) ? pct : DEFAULT_EXPORT_RECT_SCALE * 100;
+  const clamped = Math.min(MAX_EXPORT_SCALE_PCT, Math.max(MIN_EXPORT_SCALE_PCT, n));
+  return clamped / 100;
+}
 
 function acceleratorFromEvent(e: React.KeyboardEvent): string | null {
   if (MODIFIER_KEYS.has(e.key)) return null;
@@ -27,6 +45,7 @@ export function SettingsScreen(): React.JSX.Element {
   const [mainDir, setMainDir] = useState('');
   const [hotkey, setHotkey] = useState('');
   const [exportFont, setExportFont] = useState('');
+  const [exportScalePct, setExportScalePct] = useState(scaleToPercent(DEFAULT_EXPORT_RECT_SCALE));
   const [provider, setProvider] = useState<TranslationProviderId>(DEFAULT_TRANSLATION_PROVIDER);
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -37,6 +56,7 @@ export function SettingsScreen(): React.JSX.Element {
       setMainDir(settings.mainProjectDir ?? '');
       setHotkey(settings.captureHotkey);
       setExportFont(settings.exportFontFamily);
+      setExportScalePct(scaleToPercent(settings.exportRectScale ?? DEFAULT_EXPORT_RECT_SCALE));
       setProvider(settings.translationProvider);
       setApiKey(settings.translationApiKey);
       setBaseUrl(settings.translationBaseUrl);
@@ -56,6 +76,7 @@ export function SettingsScreen(): React.JSX.Element {
       mainProjectDir: mainDir || null,
       captureHotkey: hotkey || 'F8',
       exportFontFamily: exportFont.trim() || 'Arial',
+      exportRectScale: percentToScale(exportScalePct),
       translationProvider: provider,
       translationApiKey: apiKey.trim(),
       translationBaseUrl: baseUrl.trim(),
@@ -114,6 +135,24 @@ export function SettingsScreen(): React.JSX.Element {
         />
         <p className="muted">
           Font family used for translated text in exported images. Any installed system font works.
+        </p>
+      </section>
+
+      <section className="settings-section">
+        <label className="field-label">Export text box scale (%)</label>
+        <input
+          className="input"
+          type="number"
+          min={MIN_EXPORT_SCALE_PCT}
+          max={MAX_EXPORT_SCALE_PCT}
+          step={1}
+          value={exportScalePct}
+          onChange={(e) => setExportScalePct(Number(e.target.value))}
+          onBlur={() => setExportScalePct(scaleToPercent(percentToScale(exportScalePct)))}
+        />
+        <p className="muted">
+          Size of white text boxes relative to on-screen rectangles when exporting (default 70 =
+          30% smaller). Clamped to {MIN_EXPORT_SCALE_PCT}–{MAX_EXPORT_SCALE_PCT}.
         </p>
       </section>
 

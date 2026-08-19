@@ -63,6 +63,9 @@ const api: ComicReaderApi = {
   translatePage: (request: TranslateRequest) =>
     ipcRenderer.invoke(IpcChannels.translatePage, request),
 
+  setJapaneseIme: () => ipcRenderer.invoke(IpcChannels.imeSetJapanese),
+  setEnglishIme: () => ipcRenderer.invoke(IpcChannels.imeSetEnglish),
+
   sendOverlayRect: (displayId: string, rect: Rect) =>
     ipcRenderer.send(IpcChannels.overlayRect, { displayId, rect } satisfies CaptureRegion),
   sendOverlayCancel: () => ipcRenderer.send(IpcChannels.overlayCancel)

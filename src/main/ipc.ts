@@ -28,6 +28,7 @@ import {
 } from './projectStore';
 import { getMainProjectDir, loadSettings, saveSettings } from './settings';
 import { getSidecar } from './sidecar';
+import { setEnglishIme, setJapaneseIme } from './ime';
 import { translateWithSettings } from './translation/providers';
 
 let currentProject: string | null = null;
@@ -159,5 +160,13 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IpcChannels.translatePage, async (_e, request: TranslateRequest) => {
     const settings = await loadSettings();
     return translateWithSettings(request, settings);
+  });
+
+  ipcMain.handle(IpcChannels.imeSetJapanese, () => {
+    setJapaneseIme(getMainWindow());
+  });
+
+  ipcMain.handle(IpcChannels.imeSetEnglish, () => {
+    setEnglishIme(getMainWindow());
   });
 }

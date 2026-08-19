@@ -1,4 +1,5 @@
 import { CapturedImage, TextRectangle } from '../../../shared/types';
+import { scaleRectAboutCenter } from './rectScale';
 import { chooseFontSize, LINE_HEIGHT, wrapText } from './textFit';
 
 /**
@@ -8,6 +9,8 @@ import { chooseFontSize, LINE_HEIGHT, wrapText } from './textFit';
  */
 
 const PADDING_RATIO = 0.08;
+
+export { scaleRectAboutCenter } from './rectScale';
 
 export async function loadPageImage(projectName: string, file: string): Promise<HTMLImageElement> {
   const base64 = await window.api.readImageBase64(projectName, file);
@@ -21,7 +24,8 @@ export async function loadPageImage(projectName: string, file: string): Promise<
 export async function compositePage(
   projectName: string,
   image: CapturedImage,
-  fontFamily: string
+  fontFamily: string,
+  exportRectScale = 1
 ): Promise<string> {
   const img = await loadPageImage(projectName, image.file);
   const canvas = document.createElement('canvas');
@@ -33,15 +37,20 @@ export async function compositePage(
 
   for (const rect of image.rectangles) {
     if (rect.translatedText.trim() === '') continue;
-    drawTranslated(ctx, rect, fontFamily);
+    drawTranslated(ctx, rect, fontFamily, exportRectScale);
   }
 
   const dataUrl = canvas.toDataURL('image/png');
   return dataUrl.slice(dataUrl.indexOf(',') + 1);
 }
 
-function drawTranslated(ctx: CanvasRenderingContext2D, rect: TextRectangle, fontFamily: string): void {
-  const { x, y, w, h } = rect.bounds;
+function drawTranslated(
+  ctx: CanvasRenderingContext2D,
+  rect: TextRectangle,
+  fontFamily: string,
+  exportRectScale: number
+): void {
+  const { x, y, w, h } = scaleRectAboutCenter(rect.bounds, exportRectScale);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(x, y, w, h);
 

@@ -44,6 +44,9 @@ interface AppState {
   drawMode: boolean;
   /** Non-null while detect/OCR is running; shown as a progress banner. */
   pipelineProgress: string | null;
+  /** Session-only viewer zoom (1 = fit). Persists across image navigation. */
+  viewerZoom: number;
+  viewerPan: { x: number; y: number };
 
   // Capture session state (Capture Mode Screen).
   sessionBaseline: CapturedImage[];
@@ -81,6 +84,10 @@ interface AppState {
 
   selectRectangle(id: string | null): void;
   setDrawMode(on: boolean): void;
+  setViewerZoom(zoom: number): void;
+  setViewerPan(pan: { x: number; y: number }): void;
+  adjustViewerZoom(factor: number): void;
+  resetViewerView(): void;
   addRectangle(bounds: Rect): void;
   /** Find Text: create a rectangle and auto-run manga-ocr on it (spec 6.4). */
   addRectangleWithOcr(bounds: Rect): Promise<void>;
@@ -151,6 +158,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedRectangleId: null,
   drawMode: false,
   pipelineProgress: null,
+  viewerZoom: 1,
+  viewerPan: { x: 0, y: 0 },
 
   sessionBaseline: [],
   sessionImages: [],
@@ -228,6 +237,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       journalOrphan: orphan,
       selectedRectangleId: null,
       drawMode: false,
+      viewerZoom: 1,
+      viewerPan: { x: 0, y: 0 },
       screen: 'project'
     });
   },
@@ -257,6 +268,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       journalOrphan: false,
       selectedRectangleId: null,
       drawMode: false,
+      viewerZoom: 1,
+      viewerPan: { x: 0, y: 0 },
       screen: 'main'
     });
     await get().refreshProjects();
@@ -375,6 +388,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Entering draw mode drops rectangle selection so the first drag cannot
     // be mistaken for a move (spec 6.4).
     set({ drawMode: on, selectedRectangleId: on ? null : get().selectedRectangleId });
+  },
+
+  setViewerZoom(zoom) {
+    set({ viewerZoom: Math.min(8, Math.max(0.25, zoom)) });
+  },
+
+  setViewerPan(pan) {
+    set({ viewerPan: pan });
+  },
+
+  adjustViewerZoom(factor) {
+    const next = get().viewerZoom * factor;
+    set({ viewerZoom: Math.min(8, Math.max(0.25, next)) });
+  },
+
+  resetViewerView() {
+    set({ viewerZoom: 1, viewerPan: { x: 0, y: 0 } });
   },
 
   addRectangle(bounds) {
@@ -500,7 +530,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       id,
       field,
       previousValue: current[field],
-      newValue: value
+      newValue: value,
+      previousReviewed: current.reviewed
     };
     const next = applyActionToProject(project, action);
     set({ project: next, undoState: pushAction(undoState, action) });
@@ -806,7 +837,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!projectName || !image || !settings) return;
     set({ busy: true });
     try {
-      const base64 = await compositePage(projectName, image, settings.exportFontFamily);
+      const base64 = await compositePage(
+        projectName,
+        image,
+        settings.exportFontFamily,
+        settings.exportRectScale
+      );
       const out = await window.api.exportImage(projectName, image.file, base64);
       get().notify(`Exported image: ${out}`);
     } catch (err) {
@@ -824,7 +860,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const pages: ExportedPage[] = [];
       for (let i = 0; i < project.images.length; i++) {
         const image = project.images[i];
-        const dataBase64 = await compositePage(projectName, image, settings.exportFontFamily);
+        const dataBase64 = await compositePage(
+          projectName,
+          image,
+          settings.exportFontFamily,
+          settings.exportRectScale
+        );
         pages.push({ name: `${zeroPaddedPrefix(i)}${image.file}`, dataBase64 });
       }
       const out = await window.api.exportProject(projectName, pages, format);

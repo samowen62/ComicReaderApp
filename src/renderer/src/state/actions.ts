@@ -31,7 +31,11 @@ export function applyActionToProject(project: Project, action: ProjectAction): P
       );
     case 'EditRectangleText':
       return mapImage(project, action.imageFile, (rects) =>
-        rects.map((r) => (r.id === action.id ? { ...r, [action.field]: action.newValue } : r))
+        rects.map((r) =>
+          r.id === action.id
+            ? { ...r, [action.field]: action.newValue, reviewed: false }
+            : r
+        )
       );
     case 'ToggleReviewed':
       return mapImage(project, action.imageFile, (rects) =>
@@ -93,7 +97,11 @@ export function revertActionFromProject(project: Project, action: ProjectAction)
       );
     case 'EditRectangleText':
       return mapImage(project, action.imageFile, (rects) =>
-        rects.map((r) => (r.id === action.id ? { ...r, [action.field]: action.previousValue } : r))
+        rects.map((r) =>
+          r.id === action.id
+            ? { ...r, [action.field]: action.previousValue, reviewed: action.previousReviewed }
+            : r
+        )
       );
     case 'ToggleReviewed':
       return mapImage(project, action.imageFile, (rects) =>

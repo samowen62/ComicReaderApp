@@ -46,6 +46,11 @@ export interface Settings {
   translationBaseUrl: string;
   /** Model name for openaiCompatible (e.g. gpt-4o-mini). */
   translationModel: string;
+  /**
+   * Scale applied to text rectangle bounds at export (1 = full size).
+   * Default 0.7 = 30% smaller width and height, centered on the original box.
+   */
+  exportRectScale: number;
 }
 
 export type TranslationProviderId = 'deepl' | 'google' | 'openaiCompatible' | 'libreTranslate';
@@ -54,6 +59,8 @@ export const DEFAULT_HOTKEY = 'F8';
 export const DEFAULT_EXPORT_FONT = 'Arial';
 export const DEFAULT_TRANSLATION_PROVIDER: TranslationProviderId = 'deepl';
 export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
+/** Default export box size: 30% smaller than the on-screen rectangle. */
+export const DEFAULT_EXPORT_RECT_SCALE = 0.7;
 
 export const TRANSLATION_PROVIDER_OPTIONS: Array<{
   id: TranslationProviderId;
@@ -116,6 +123,7 @@ export type ProjectAction =
       field: 'originalText' | 'translatedText';
       previousValue: string;
       newValue: string;
+      previousReviewed: boolean;
     }
   | { type: 'ToggleReviewed'; imageFile: string; id: string; previousValue: boolean }
   | {
@@ -198,7 +206,9 @@ export const IpcChannels = {
   ocrDetectAndRead: 'ocr:detectAndRead',
   ocrCancel: 'ocr:cancel',
   ocrProgress: 'ocr:progress',
-  translatePage: 'translate:page'
+  translatePage: 'translate:page',
+  imeSetJapanese: 'ime:setJapanese',
+  imeSetEnglish: 'ime:setEnglish'
 } as const;
 
 export interface OcrRegionResult {
@@ -292,6 +302,11 @@ export interface ComicReaderApi {
 
   /** Translate an ordered list of segments with page-level context (spec 7.4). */
   translatePage(request: TranslateRequest): Promise<TranslateResponse>;
+
+  /** Switch OS IME toward Japanese Hiragana (Windows) / no-op elsewhere. */
+  setJapaneseIme(): Promise<void>;
+  /** Restore English keyboard layout (Windows) / no-op elsewhere. */
+  setEnglishIme(): Promise<void>;
 
   sendOverlayRect(displayId: string, rect: Rect): void;
   sendOverlayCancel(): void;
