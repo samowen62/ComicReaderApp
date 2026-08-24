@@ -29,6 +29,7 @@ import {
 import { getMainProjectDir, loadSettings, saveSettings } from './settings';
 import { getSidecar } from './sidecar';
 import { setEnglishIme, setJapaneseIme } from './ime';
+import { listEnglishFonts } from './fonts';
 import { translateWithSettings } from './translation/providers';
 
 let currentProject: string | null = null;
@@ -169,4 +170,6 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle(IpcChannels.imeSetEnglish, () => {
     setEnglishIme(getMainWindow());
   });
+
+  ipcMain.handle(IpcChannels.fontsList, () => listEnglishFonts());
 }

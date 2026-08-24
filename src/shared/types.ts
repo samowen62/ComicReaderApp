@@ -56,7 +56,7 @@ export interface Settings {
 export type TranslationProviderId = 'deepl' | 'google' | 'openaiCompatible' | 'libreTranslate';
 
 export const DEFAULT_HOTKEY = 'F8';
-export const DEFAULT_EXPORT_FONT = 'Arial';
+export const DEFAULT_EXPORT_FONT = 'Bubble Sans';
 export const DEFAULT_TRANSLATION_PROVIDER: TranslationProviderId = 'deepl';
 export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 /** Default export box size: 30% smaller than the on-screen rectangle. */
@@ -208,7 +208,8 @@ export const IpcChannels = {
   ocrProgress: 'ocr:progress',
   translatePage: 'translate:page',
   imeSetJapanese: 'ime:setJapanese',
-  imeSetEnglish: 'ime:setEnglish'
+  imeSetEnglish: 'ime:setEnglish',
+  fontsList: 'fonts:list'
 } as const;
 
 export interface OcrRegionResult {
@@ -307,6 +308,9 @@ export interface ComicReaderApi {
   setJapaneseIme(): Promise<void>;
   /** Restore English keyboard layout (Windows) / no-op elsewhere. */
   setEnglishIme(): Promise<void>;
+
+  /** Installed Windows fonts that support ANSI/English (Latin) design. */
+  listFonts(): Promise<string[]>;
 
   sendOverlayRect(displayId: string, rect: Rect): void;
   sendOverlayCancel(): void;

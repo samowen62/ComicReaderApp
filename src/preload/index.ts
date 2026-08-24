@@ -66,6 +66,8 @@ const api: ComicReaderApi = {
   setJapaneseIme: () => ipcRenderer.invoke(IpcChannels.imeSetJapanese),
   setEnglishIme: () => ipcRenderer.invoke(IpcChannels.imeSetEnglish),
 
+  listFonts: () => ipcRenderer.invoke(IpcChannels.fontsList),
+
   sendOverlayRect: (displayId: string, rect: Rect) =>
     ipcRenderer.send(IpcChannels.overlayRect, { displayId, rect } satisfies CaptureRegion),
   sendOverlayCancel: () => ipcRenderer.send(IpcChannels.overlayCancel)

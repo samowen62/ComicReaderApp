@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  DEFAULT_EXPORT_FONT,
   DEFAULT_EXPORT_RECT_SCALE,
   DEFAULT_OPENAI_MODEL,
   DEFAULT_TRANSLATION_PROVIDER,
@@ -44,7 +45,8 @@ export function SettingsScreen(): React.JSX.Element {
   const { settings, saveSettings, setScreen, notify } = useAppStore();
   const [mainDir, setMainDir] = useState('');
   const [hotkey, setHotkey] = useState('');
-  const [exportFont, setExportFont] = useState('');
+  const [exportFont, setExportFont] = useState(DEFAULT_EXPORT_FONT);
+  const [fontOptions, setFontOptions] = useState<string[]>([DEFAULT_EXPORT_FONT]);
   const [exportScalePct, setExportScalePct] = useState(scaleToPercent(DEFAULT_EXPORT_RECT_SCALE));
   const [provider, setProvider] = useState<TranslationProviderId>(DEFAULT_TRANSLATION_PROVIDER);
   const [apiKey, setApiKey] = useState('');
@@ -52,10 +54,16 @@ export function SettingsScreen(): React.JSX.Element {
   const [model, setModel] = useState(DEFAULT_OPENAI_MODEL);
 
   useEffect(() => {
+    void window.api.listFonts().then((fonts) => {
+      setFontOptions(fonts.length > 0 ? fonts : [DEFAULT_EXPORT_FONT]);
+    });
+  }, []);
+
+  useEffect(() => {
     if (settings) {
       setMainDir(settings.mainProjectDir ?? '');
       setHotkey(settings.captureHotkey);
-      setExportFont(settings.exportFontFamily);
+      setExportFont(settings.exportFontFamily || DEFAULT_EXPORT_FONT);
       setExportScalePct(scaleToPercent(settings.exportRectScale ?? DEFAULT_EXPORT_RECT_SCALE));
       setProvider(settings.translationProvider);
       setApiKey(settings.translationApiKey);
@@ -71,11 +79,16 @@ export function SettingsScreen(): React.JSX.Element {
 
   const selectedMeta = TRANSLATION_PROVIDER_OPTIONS.find((o) => o.id === provider);
 
+  const fontSelectOptions =
+    exportFont && !fontOptions.some((f) => f.toLowerCase() === exportFont.toLowerCase())
+      ? [exportFont, ...fontOptions]
+      : fontOptions;
+
   const save = async () => {
     await saveSettings({
       mainProjectDir: mainDir || null,
       captureHotkey: hotkey || 'F8',
-      exportFontFamily: exportFont.trim() || 'Arial',
+      exportFontFamily: exportFont.trim() || DEFAULT_EXPORT_FONT,
       exportRectScale: percentToScale(exportScalePct),
       translationProvider: provider,
       translationApiKey: apiKey.trim(),
@@ -127,14 +140,19 @@ export function SettingsScreen(): React.JSX.Element {
 
       <section className="settings-section">
         <label className="field-label">Export font</label>
-        <input
+        <select
           className="input"
           value={exportFont}
           onChange={(e) => setExportFont(e.target.value)}
-          placeholder="Arial"
-        />
+        >
+          {fontSelectOptions.map((font) => (
+            <option key={font} value={font}>
+              {font}
+            </option>
+          ))}
+        </select>
         <p className="muted">
-          Font family used for translated text in exported images. Any installed system font works.
+          Installed Windows fonts designed for English (ANSI). Default is {DEFAULT_EXPORT_FONT}.
         </p>
       </section>
 

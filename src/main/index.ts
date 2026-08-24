@@ -1,6 +1,7 @@
 import { app, BrowserWindow, net, protocol } from 'electron';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import appIcon from '../assets/app.ico?asset';
 import { registerIpc, getCurrentProject } from './ipc';
 import {
   discardJournalSync,
@@ -26,6 +27,7 @@ function createMainWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
