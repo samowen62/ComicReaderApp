@@ -202,6 +202,7 @@ export const IpcChannels = {
   hotkeyPressed: 'hotkey:pressed',
   exportImage: 'export:image',
   exportProject: 'export:project',
+  ocrInit: 'ocr:init',
   ocrRegion: 'ocr:region',
   ocrDetectAndRead: 'ocr:detectAndRead',
   ocrCancel: 'ocr:cancel',
@@ -294,6 +295,8 @@ export interface ComicReaderApi {
   /** Writes composited pages as a numbered directory, .zip, or .cbz (spec 10.2). */
   exportProject(projectName: string, pages: ExportedPage[], format: ExportFormat): Promise<string>;
 
+  /** Initialize the OCR system. */
+  ocrInit(): Promise<void>;
   /** Run manga-ocr on a single image region (Find Text, spec 6.4). */
   ocrRegion(projectName: string, file: string, bounds: Rect): Promise<OcrRegionResult>;
   /** Detect bubbles and OCR each region on a page (Auto Translate Page steps 1–3). */

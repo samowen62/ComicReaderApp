@@ -53,6 +53,7 @@ const api: ComicReaderApi = {
   exportProject: (projectName: string, pages: ExportedPage[], format: ExportFormat) =>
     ipcRenderer.invoke(IpcChannels.exportProject, projectName, pages, format),
 
+  ocrInit: () => ipcRenderer.invoke(IpcChannels.ocrInit),
   ocrRegion: (projectName: string, file: string, bounds: Rect) =>
     ipcRenderer.invoke(IpcChannels.ocrRegion, projectName, file, bounds),
   ocrDetectAndRead: (projectName: string, file: string) =>

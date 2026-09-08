@@ -146,6 +146,15 @@ export class Sidecar {
     });
   }
 
+  async init(): Promise<void> {
+    if (!this.proc) return;
+    try {
+      await this.request('init', {});
+    } catch {
+      // Best effort.
+    }
+  }
+
   async ocrRegion(imagePath: string, bounds: Rect): Promise<{ text: string; failed: boolean; error?: string }> {
     return (await this.request('ocr_region', { imagePath, bounds })) as {
       text: string;

@@ -141,6 +141,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     }
   );
 
+  ipcMain.handle(IpcChannels.ocrInit, async () => {
+    await sidecar.init();
+  });
+
   ipcMain.handle(
     IpcChannels.ocrRegion,
     async (_e, projectName: string, file: string, bounds: Rect) => {

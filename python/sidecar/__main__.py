@@ -99,10 +99,13 @@ def get_detector():
             log("detector ready")
         return _detector
 
-
 def cmd_ping(req: dict[str, Any]) -> dict[str, Any]:
     return {"status": "ready"}
 
+def cmd_init(req: dict[str, Any]) -> dict[str, Any]:
+    get_ocr()
+    get_detector()
+    return {"status": "ready"}
 
 def cmd_ocr_region(req: dict[str, Any]) -> dict[str, Any]:
     from PIL import Image
@@ -189,6 +192,8 @@ def handle(req: dict[str, Any]) -> None:
     try:
         if cmd == "ping":
             respond(req_id, True, cmd_ping(req))
+        elif cmd == "init":
+            respond(req_id, True, cmd_init(req))
         elif cmd == "ocr_region":
             respond(req_id, True, cmd_ocr_region(req))
         elif cmd == "detect_and_ocr":

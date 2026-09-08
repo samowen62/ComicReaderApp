@@ -173,6 +173,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async init() {
     const settings = await window.api.getSettings();
+    await window.api.ocrInit();
+
     set({ settings });
     await get().refreshProjects();
   },
