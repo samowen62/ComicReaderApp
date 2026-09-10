@@ -47,6 +47,8 @@ Original-text field can switch to Hiragana on focus. **Export text box scale**
 3. Or **Find Text** to draw a region (auto OCR), then **Auto Translate** on the
    selected rectangle (sends full page context; applies only that bubble).
 4. Edit / Mark Reviewed / Export Image or Export Project (.zip / .cbz).
+   F2 selects the next textbox (reading order, wraps); F3 marks the current
+   textbox reviewed and advances — both work even while typing.
 5. Zoom/pan the page viewer with Ctrl+wheel, middle-drag or Space+drag, or the
    Zoom − / Zoom + / Reset view toolbar buttons (view persists across pages).
 

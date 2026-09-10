@@ -19,10 +19,22 @@ export function ProjectScreen(): React.JSX.Element {
   } = store;
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
-  // Rectangle keyboard shortcuts: Delete removes the selected rectangle,
-  // Escape exits draw mode or deselects. Skipped while typing in text fields.
+  // Rectangle keyboard shortcuts: F2 cycles selection through textboxes in
+  // reading order (wraps), F3 marks the selected one reviewed and advances.
+  // F2/F3 work even while typing in text fields. Delete removes the selected
+  // rectangle, Escape exits draw mode or deselects — both skipped in inputs.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        store.selectNextRectangle();
+        return;
+      }
+      if (e.key === 'F3') {
+        e.preventDefault();
+        store.reviewAndAdvance();
+        return;
+      }
       const target = e.target as HTMLElement;
       if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) return;
       if (e.key === 'Delete' && selectedRectangleId) {

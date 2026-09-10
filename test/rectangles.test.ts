@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyActionToProject, revertActionFromProject } from '../src/renderer/src/state/actions';
-import { computeReadingOrder, renumber } from '../src/renderer/src/state/readingOrder';
+import { computeReadingOrder, nextRectangleId, renumber } from '../src/renderer/src/state/readingOrder';
 import { emptyProject, Project, ProjectAction, Rect, TextRectangle } from '../src/shared/types';
 
 let seq = 0;
@@ -166,5 +166,36 @@ describe('rectangle user actions', () => {
     expect(rectsOf(applied).find((r) => r.id === 'r2')!.readingOrderIndex).toBe(1);
     const reverted = revertActionFromProject(applied, action);
     expect(rectsOf(reverted).find((r) => r.id === 'r2')!.readingOrderIndex).toBe(2);
+  });
+});
+
+describe('nextRectangleId', () => {
+  const ordered = () =>
+    computeReadingOrder([
+      rect('a', { x: 300, y: 0, w: 50, h: 50 }),
+      rect('b', { x: 100, y: 0, w: 50, h: 50 }),
+      rect('c', { x: 0, y: 0, w: 50, h: 50 })
+    ]);
+  // Reading order after computeReadingOrder: a=1, b=2, c=3.
+
+  it('returns null for an empty list', () => {
+    expect(nextRectangleId([], null)).toBeNull();
+  });
+
+  it('selects the first rectangle when nothing is selected', () => {
+    expect(nextRectangleId(ordered(), null)).toBe('a');
+  });
+
+  it('advances to the next reading-order number', () => {
+    expect(nextRectangleId(ordered(), 'a')).toBe('b');
+    expect(nextRectangleId(ordered(), 'b')).toBe('c');
+  });
+
+  it('wraps from the last rectangle back to the first', () => {
+    expect(nextRectangleId(ordered(), 'c')).toBe('a');
+  });
+
+  it('falls back to the first rectangle for a stale id', () => {
+    expect(nextRectangleId(ordered(), 'deleted')).toBe('a');
   });
 });

@@ -43,3 +43,18 @@ export function renumber(
   const indexOf = new Map(ordered.map((r, i) => [r.id, i + 1]));
   return rectangles.map((r) => ({ ...r, readingOrderIndex: indexOf.get(r.id) ?? r.readingOrderIndex }));
 }
+
+/**
+ * Next rectangle id in reading order with wrap-around (F2/F3 navigation).
+ * Empty list → null; no/stale current id → first; last → wraps to first.
+ */
+export function nextRectangleId(
+  rectangles: TextRectangle[],
+  currentId: string | null
+): string | null {
+  if (rectangles.length === 0) return null;
+  const ordered = [...rectangles].sort((a, b) => a.readingOrderIndex - b.readingOrderIndex);
+  const from = currentId ? ordered.findIndex((r) => r.id === currentId) : -1;
+  if (from < 0) return ordered[0].id;
+  return ordered[(from + 1) % ordered.length].id;
+}

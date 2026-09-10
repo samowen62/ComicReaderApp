@@ -15,7 +15,7 @@ import {
 } from '../../../shared/types';
 import { compositePage } from '../export/composite';
 import { applyActionToProject, revertActionFromProject } from './actions';
-import { computeReadingOrder } from './readingOrder';
+import { computeReadingOrder, nextRectangleId } from './readingOrder';
 import { canRedo, canUndo, emptyUndoState, popRedo, popUndo, pushAction, UndoState } from './undoStack';
 
 export type Screen = 'main' | 'settings' | 'capture' | 'project';
@@ -96,6 +96,10 @@ interface AppState {
   commitRectangleText(id: string, field: 'originalText' | 'translatedText', value: string): void;
   toggleReviewed(id: string): void;
   renumberRectangle(id: string, newIndex: number): void;
+  /** F2: select the next rectangle in reading order, wrapping to the first. */
+  selectNextRectangle(): void;
+  /** F3: mark the selected rectangle reviewed (set, not toggle) and advance. */
+  reviewAndAdvance(): void;
   /** Auto Translate Page: detect + OCR + translate (spec §7). */
   runAutoTranslatePage(): Promise<void>;
   /** Per-rectangle Auto Translate with full page context (spec §6.6). */
@@ -384,6 +388,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   selectRectangle(id) {
     set({ selectedRectangleId: id });
+  },
+
+  selectNextRectangle() {
+    const { project, selectedImage, selectedRectangleId } = get();
+    if (!project || !selectedImage) return;
+    const rects =
+      project.images.find((i) => i.file === selectedImage)?.rectangles ?? [];
+    const nextId = nextRectangleId(rects, selectedRectangleId);
+    if (nextId) set({ selectedRectangleId: nextId });
+  },
+
+  reviewAndAdvance() {
+    const { project, selectedImage, selectedRectangleId } = get();
+    if (!project || !selectedImage) return;
+    if (selectedRectangleId) {
+      const current = project.images
+        .find((i) => i.file === selectedImage)
+        ?.rectangles.find((r) => r.id === selectedRectangleId);
+      // Set-semantics: only toggle from false -> true, never un-review.
+      if (current && !current.reviewed) get().toggleReviewed(selectedRectangleId);
+    }
+    get().selectNextRectangle();
   },
 
   setDrawMode(on) {
