@@ -176,9 +176,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   busy: false,
 
   async init() {
+    // Fire-and-forget: warm the sidecar in the background so app startup
+    // isn't blocked on the ~1 min model load.
+    void window.api.ocrInit();
     const settings = await window.api.getSettings();
-    await window.api.ocrInit();
-
     set({ settings });
     await get().refreshProjects();
   },

@@ -146,12 +146,16 @@ export class Sidecar {
     });
   }
 
+  /**
+   * Warm-up: spawn the sidecar (if not running) and pre-load both models so
+   * the first Find Text / Auto Translate doesn't pay the ~1 min load time.
+   * request() spawns lazily via ensureStarted(), so no proc guard here.
+   */
   async init(): Promise<void> {
-    if (!this.proc) return;
     try {
       await this.request('init', {});
-    } catch {
-      // Best effort.
+    } catch (err) {
+      console.error('[sidecar] warm-up failed', err);
     }
   }
 
